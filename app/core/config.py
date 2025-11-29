@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     OTEL_SERVICE_NAME: str = "clestiq-shield-api"
     OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://otel-collector:4317"
 
+    # Datadog (Optional, used by OTel Collector but present in .env)
+    DD_API_KEY: str | None = None
+    DD_SITE: str | None = None
+
+
     class Config:
         case_sensitive = True
         env_file = ".env"

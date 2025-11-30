@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     GCP_LOCATION: str = "us-east1"
     GOOGLE_APPLICATION_CREDENTIALS: str | None = None
 
+    # Security Settings
+    SECURITY_SANITIZATION_ENABLED: bool = True
+    SECURITY_PII_REDACTION_ENABLED: bool = True
+    SECURITY_XSS_PROTECTION_ENABLED: bool = True
+    SECURITY_SQL_INJECTION_DETECTION_ENABLED: bool = True
+    SECURITY_COMMAND_INJECTION_DETECTION_ENABLED: bool = True
+    SECURITY_LLM_CHECK_THRESHOLD: float = 0.85  # Block if security_score > this value
+
 
     class Config:
         case_sensitive = True

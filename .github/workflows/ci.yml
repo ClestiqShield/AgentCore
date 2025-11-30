@@ -48,6 +48,7 @@ jobs:
           OTEL_SERVICE_NAME: test-service
           OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4317
           GCP_PROJECT_ID: test-project
+          TELEMETRY_ENABLED: false
         run: |
           poetry run pytest --cov=app --cov-report=xml
 

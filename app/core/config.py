@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     
     # OpenTelemetry
+    TELEMETRY_ENABLED: bool = True  # Set to False in tests to avoid connection errors
     OTEL_SERVICE_NAME: str = "clestiq-shield-api"
     OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://otel-collector:4317"
 
@@ -28,7 +29,7 @@ class Settings(BaseSettings):
     SECURITY_XSS_PROTECTION_ENABLED: bool = True
     SECURITY_SQL_INJECTION_DETECTION_ENABLED: bool = True
     SECURITY_COMMAND_INJECTION_DETECTION_ENABLED: bool = True
-    SECURITY_LLM_CHECK_THRESHOLD: float = 0.85  # Block if security_score > this value
+    SECURITY_LLM_CHECK_THRESHOLD: float = 0.85
 
 
     class Config:

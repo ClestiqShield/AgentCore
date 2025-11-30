@@ -29,6 +29,24 @@ def add_open_telemetry_spans(_, __, event_dict):
     return event_dict
 
 def setup_telemetry(app):
+    # Skip telemetry setup if disabled (e.g., in test environments)
+    if not settings.TELEMETRY_ENABLED:
+        log = structlog.get_logger()
+        log.info("Telemetry disabled, skipping OpenTelemetry initialization")
+        
+        # Still configure basic structlog for tests
+        structlog.configure(
+            processors=[
+                structlog.contextvars.merge_contextvars,
+                structlog.processors.add_log_level,
+                structlog.processors.TimeStamper(fmt="iso"),
+                structlog.processors.JSONRenderer()
+            ],
+            logger_factory=structlog.stdlib.LoggerFactory(),
+            cache_logger_on_first_use=True,
+        )
+        return
+    
     resource = Resource.create({
         ResourceAttributes.SERVICE_NAME: settings.OTEL_SERVICE_NAME,
     })

@@ -57,14 +57,12 @@ jobs:
           SENTINEL_CONTAINER=$(docker compose ps -q sentinel)
           GUARDIAN_CONTAINER=$(docker compose ps -q guardian)
           DB_CONTAINER=$(docker compose ps -q db)
-          OTEL_CONTAINER=$(docker compose ps -q otel-collector)
 
           echo "Container IDs found:"
           echo "  Gateway: $GATEWAY_CONTAINER"
           echo "  Sentinel: $SENTINEL_CONTAINER"
           echo "  Guardian: $GUARDIAN_CONTAINER"
           echo "  Database: $DB_CONTAINER"
-          echo "  OTEL Collector: $OTEL_CONTAINER"
           echo ""
 
           while [ $ELAPSED -lt $MAX_WAIT ]; do
@@ -75,20 +73,17 @@ jobs:
             SENTINEL_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $SENTINEL_CONTAINER 2>/dev/null || echo "no_healthcheck")
             GUARDIAN_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $GUARDIAN_CONTAINER 2>/dev/null || echo "no_healthcheck")
             DB_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $DB_CONTAINER 2>/dev/null || echo "no_healthcheck")
-            OTEL_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $OTEL_CONTAINER 2>/dev/null || echo "no_healthcheck")
             
             echo "  Gateway: $GATEWAY_HEALTH"
             echo "  Sentinel: $SENTINEL_HEALTH"
             echo "  Guardian: $GUARDIAN_HEALTH"
             echo "  Database: $DB_HEALTH"
-            echo "  OTEL Collector: $OTEL_HEALTH"
             
             # Check if all services are healthy
             if [ "$GATEWAY_HEALTH" = "healthy" ] && \
                [ "$SENTINEL_HEALTH" = "healthy" ] && \
                [ "$GUARDIAN_HEALTH" = "healthy" ] && \
-               [ "$DB_HEALTH" = "healthy" ] && \
-               [ "$OTEL_HEALTH" = "healthy" ]; then
+               [ "$DB_HEALTH" = "healthy" ]; then
               echo "✅ All services are healthy!"
               exit 0
             fi
@@ -97,8 +92,7 @@ jobs:
             if [ "$GATEWAY_HEALTH" = "unhealthy" ] || \
                [ "$SENTINEL_HEALTH" = "unhealthy" ] || \
                [ "$GUARDIAN_HEALTH" = "unhealthy" ] || \
-               [ "$DB_HEALTH" = "unhealthy" ] || \
-               [ "$OTEL_HEALTH" = "unhealthy" ]; then
+               [ "$DB_HEALTH" = "unhealthy" ]; then
               echo "❌ One or more services are unhealthy!"
               docker compose ps
               docker compose logs

@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, Body, Request, HTTPException, status
-from typing import Any, Dict
+from fastapi import APIRouter, Depends, Request, HTTPException, status
+import time
+from typing import Optional
 import httpx
 import structlog
 from opentelemetry import trace
@@ -7,6 +8,12 @@ from opentelemetry import trace
 from app.api import deps
 from app.models.application import Application
 from app.core.config import get_settings
+from app.schemas.gateway import (
+    GatewayRequest,
+    GatewayResponse,
+    ResponseMetrics,
+    TokenUsage,
+)
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -15,31 +22,59 @@ settings = get_settings()
 tracer = trace.get_tracer(__name__)
 
 
-@router.post("/")
+@router.post("/", response_model=GatewayResponse)
 async def proxy_request(
     request: Request,
-    body: Dict[str, Any] = Body(...),
+    body: GatewayRequest,
     current_app: Application = Depends(deps.get_current_app),
 ):
     """
-    Proxy endpoint that accepts any JSON body.
+    Proxy endpoint that accepts structured gateway requests.
     Authenticated via X-API-Key.
     Routes request to Sentinel (Input Security) for analysis.
+
+    Request Body:
+        - query: User query/prompt to process
+        - model: LLM model to use (default: gemini-2.0-flash)
+        - moderation: Content moderation level (strict, moderate, relaxed, raw)
+        - output_format: Output format (json or toon)
+        - guardrails: Optional guardrails configuration
+
+    Response:
+        - response: LLM response content
+        - app: Application name
+        - metrics: Detailed processing metrics including token usage
     """
+    start_time = time.perf_counter()
+
     logger.info(
         "Proxy request received",
         app_name=current_app.name,
         app_id=str(current_app.id),
-        body_keys=list(body.keys()),
+        model=body.model,
+        moderation=body.moderation,
     )
 
     # Get client info
     client_ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
 
+    # Build input dict for Sentinel (maintains compatibility)
+    sentinel_input = {
+        "prompt": body.query,
+        "model": body.model,
+        "moderation": body.moderation,
+        "output_format": body.output_format,
+    }
+
+    # Add guardrails config if provided
+    if body.guardrails:
+        sentinel_input["guardrails"] = body.guardrails.model_dump()
+
     with tracer.start_as_current_span("sentinel_call") as span:
         span.set_attribute("app.name", current_app.name)
         span.set_attribute("app.id", str(current_app.id))
+        span.set_attribute("llm.model", body.model)
 
         # Call Sentinel Service
         try:
@@ -52,7 +87,7 @@ async def proxy_request(
                 response = await client.post(
                     f"{settings.SENTINEL_SERVICE_URL}/chat",
                     json={
-                        "input": body,
+                        "input": sentinel_input,
                         "client_ip": client_ip,
                         "user_agent": user_agent,
                     },
@@ -81,6 +116,9 @@ async def proxy_request(
                 detail="Internal server error",
             )
 
+    # Calculate processing time
+    processing_time_ms = (time.perf_counter() - start_time) * 1000
+
     # Check if blocked
     if sentinel_result.get("is_blocked"):
         logger.warning(
@@ -98,9 +136,33 @@ async def proxy_request(
 
     logger.info("Request passed Sentinel check")
 
-    # Return the LLM response from Sentinel (which includes Guardian validation)
-    return {
-        "response": sentinel_result.get("llm_response"),
-        "app": current_app.name,
-        "metrics": sentinel_result.get("metrics"),
-    }
+    # Extract metrics from Sentinel response
+    sentinel_metrics = sentinel_result.get("metrics") or {}
+
+    # Build token usage if available
+    token_usage: Optional[TokenUsage] = None
+    llm_tokens = sentinel_metrics.get("llm_tokens")
+    if llm_tokens and isinstance(llm_tokens, dict):
+        token_usage = TokenUsage(
+            input_tokens=llm_tokens.get("input", 0),
+            output_tokens=llm_tokens.get("output", 0),
+            total_tokens=llm_tokens.get("total", 0),
+        )
+
+    # Build response metrics
+    response_metrics = ResponseMetrics(
+        security_score=sentinel_metrics.get("security_score", 0.0),
+        tokens_saved=sentinel_metrics.get("tokens_saved", 0),
+        token_usage=token_usage,
+        model_used=sentinel_metrics.get("model_used"),
+        threats_detected=sentinel_metrics.get("threats_detected", 0),
+        pii_redacted=sentinel_metrics.get("pii_redacted", 0),
+        processing_time_ms=round(processing_time_ms, 2),
+    )
+
+    # Return the enhanced response
+    return GatewayResponse(
+        response=sentinel_result.get("llm_response"),
+        app=current_app.name,
+        metrics=response_metrics,
+    )

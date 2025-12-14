@@ -177,6 +177,13 @@ async def proxy_request(
         threats_detected=sentinel_metrics.get("threats_detected", 0),
         pii_redacted=sentinel_metrics.get("pii_redacted", 0),
         processing_time_ms=round(processing_time_ms, 2),
+        # NEW: Guardian validation results
+        hallucination_detected=sentinel_metrics.get("hallucination_detected"),
+        citations_verified=sentinel_metrics.get("citations_verified"),
+        tone_compliant=sentinel_metrics.get("tone_compliant"),
+        disclaimer_injected=sentinel_metrics.get("disclaimer_injected"),
+        false_refusal_detected=sentinel_metrics.get("false_refusal_detected"),
+        toxicity_score=sentinel_metrics.get("toxicity_score"),
     )
 
     # Return the enhanced response

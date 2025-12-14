@@ -14,7 +14,9 @@ class AgentState(TypedDict):
     # PII Redaction/Pseudonymization
     pii_detections: Optional[List[Dict[str, Any]]]
     redacted_input: Optional[str]
-    pii_mapping: Optional[Dict[str, str]]  # Token -> Original value map for depseudonymization
+    pii_mapping: Optional[
+        Dict[str, str]
+    ]  # Token -> Original value map for depseudonymization
 
     # Threat Detection
     detected_threats: Optional[List[Dict[str, Any]]]
@@ -28,6 +30,9 @@ class AgentState(TypedDict):
     llm_tokens_used: Optional[Dict[str, int]]
     llm_error: Optional[str]
     model_used: Optional[str]
+
+    # Guardian Validation Results
+    guardian_validation: Optional[Dict[str, Any]]
 
     # Metrics Data (for response payload)
     metrics_data: Optional[Dict[str, Any]]

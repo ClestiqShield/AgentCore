@@ -1,20 +1,30 @@
 import logging
+import sys
 import structlog
 from opentelemetry import trace, metrics
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.semconv.resource import ResourceAttributes
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+# HTTP Exporters
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
+
+# Import OTLP Log components (HTTP)
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry._logs import set_logger_provider
 
 from app.core.config import get_settings
 
 settings = get_settings()
+
 
 def add_open_telemetry_spans(_, __, event_dict):
     span = trace.get_current_span()
@@ -28,87 +38,93 @@ def add_open_telemetry_spans(_, __, event_dict):
     event_dict["trace_id"] = format(ctx.trace_id, "032x")
     return event_dict
 
+
 def setup_telemetry(app):
     # Skip telemetry setup if disabled (e.g., in test environments)
     if not settings.TELEMETRY_ENABLED:
         log = structlog.get_logger()
         log.info("Telemetry disabled, skipping OpenTelemetry initialization")
-        
+
         # Still configure basic structlog for tests
         structlog.configure(
             processors=[
                 structlog.contextvars.merge_contextvars,
                 structlog.processors.add_log_level,
                 structlog.processors.TimeStamper(fmt="iso"),
-                structlog.processors.JSONRenderer()
+                structlog.processors.JSONRenderer(),
             ],
             logger_factory=structlog.stdlib.LoggerFactory(),
             cache_logger_on_first_use=True,
         )
         return
-    
-    resource = Resource.create({
-        ResourceAttributes.SERVICE_NAME: settings.OTEL_SERVICE_NAME,
-        ResourceAttributes.SERVICE_VERSION: settings.VERSION,
-    })
 
-    # Tracing
+    import socket
+
+    resource = Resource.create(
+        {
+            ResourceAttributes.SERVICE_NAME: settings.OTEL_SERVICE_NAME,
+            ResourceAttributes.SERVICE_VERSION: settings.VERSION,
+            ResourceAttributes.HOST_NAME: socket.gethostname(),
+        }
+    )
+
+    # Tracing (HTTP)
     trace_provider = TracerProvider(resource=resource)
-    otlp_trace_exporter = OTLPSpanExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT, insecure=True)
+    otlp_trace_exporter = OTLPSpanExporter(
+        endpoint=f"{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces"
+    )
     trace_provider.add_span_processor(BatchSpanProcessor(otlp_trace_exporter))
     trace.set_tracer_provider(trace_provider)
 
-    # Metrics
-    otlp_metric_exporter = OTLPMetricExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT, insecure=True)
+    # Metrics (HTTP)
+    otlp_metric_exporter = OTLPMetricExporter(
+        endpoint=f"{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/metrics"
+    )
     metric_reader = PeriodicExportingMetricReader(otlp_metric_exporter)
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
 
-    # Logging Configuration
-    # Ensure logs directory exists
-    import os
-    import sys
-    os.makedirs("logs", exist_ok=True)
+    # --- OTLP Logging Setup (HTTP) ---
+    logger_provider = LoggerProvider(resource=resource)
+    set_logger_provider(logger_provider)
 
-    # Configure Standard Library Logging (to handle File + Console + OTel hook)
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    
-    # Clear existing handlers to avoid duplication
-    root_logger.handlers = []
+    # /v1/logs
+    otlp_log_exporter = OTLPLogExporter(
+        endpoint=f"{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs"
+    )
 
-    # File Handler
-    file_handler = logging.FileHandler("logs/security-agent.log")
-    file_formatter = logging.Formatter("%(message)s")
-    file_handler.setFormatter(file_formatter)
-    root_logger.addHandler(file_handler)
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_log_exporter))
 
-    # Console Handler
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_formatter = logging.Formatter("%(message)s")
-    stream_handler.setFormatter(stream_formatter)
-    root_logger.addHandler(stream_handler)
-
-    # Configure Structlog to use Standard Library
+    # Configure Structlog
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
             add_open_telemetry_spans,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.JSONRenderer()
+            structlog.processors.JSONRenderer(),
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
 
-    # Instrument Logging for OTel (sends logs to OTLP)
-    # set_logging_format=False prevents it from overriding our handlers
-    LoggingInstrumentor().instrument(set_logging_format=False)
+    # Configure Standard Library Logging
+    otlp_handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(logging.Formatter("%(message)s"))
+
+    logging.basicConfig(
+        level=logging.INFO,
+        handlers=[otlp_handler, stdout_handler],
+    )
 
     # Instrument FastAPI
-    FastAPIInstrumentor.instrument_app(app, tracer_provider=trace_provider, meter_provider=meter_provider)
+    FastAPIInstrumentor.instrument_app(
+        app, tracer_provider=trace_provider, meter_provider=meter_provider
+    )
 
     # Log initialization
     log = structlog.get_logger()
-    log.info("Telemetry and Structlog initialized", service_name=settings.OTEL_SERVICE_NAME)
+    log.info(
+        "Telemetry and Structlog initialized", service_name=settings.OTEL_SERVICE_NAME
+    )

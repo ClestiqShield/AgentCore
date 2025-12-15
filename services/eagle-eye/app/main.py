@@ -8,9 +8,11 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
 from app.core.config import get_settings
+from app.core.telemetry import setup_logging
 from app.api.v1.endpoints import auth, users, apps, api_keys, feedback
 
 settings = get_settings()
+setup_logging()
 logger = structlog.get_logger()
 
 

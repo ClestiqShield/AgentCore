@@ -1,25 +1,17 @@
 import logging
 import sys
 import structlog
-from opentelemetry import trace, metrics
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.semconv.resource import ResourceAttributes
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-
-# HTTP Exporters
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.logging import LoggingInstrumentor
+from opentelemetry import trace
 
 # Import OTLP Log components (HTTP)
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+
+# HTTP Log Exporter
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry._logs import set_logger_provider
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.semconv.resource import ResourceAttributes
 
 from app.core.config import get_settings
 
@@ -39,11 +31,11 @@ def add_open_telemetry_spans(_, __, event_dict):
     return event_dict
 
 
-def setup_telemetry(app):
-    # Skip telemetry setup if disabled (e.g., in test environments)
+def setup_logging():
     if not settings.TELEMETRY_ENABLED:
         return
 
+    # Create Resource
     import socket
 
     resource = Resource.create(
@@ -54,30 +46,15 @@ def setup_telemetry(app):
         }
     )
 
-    # Tracing (HTTP)
-    trace_provider = TracerProvider(resource=resource)
-    # The HTTP exporter usually needs the full path: /v1/traces
-    otlp_trace_exporter = OTLPSpanExporter(
-        endpoint=f"{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces"
-    )
-    trace_provider.add_span_processor(BatchSpanProcessor(otlp_trace_exporter))
-    trace.set_tracer_provider(trace_provider)
-
-    # Metrics (HTTP)
-    # /v1/metrics
-    otlp_metric_exporter = OTLPMetricExporter(
-        endpoint=f"{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/metrics"
-    )
-    metric_reader = PeriodicExportingMetricReader(otlp_metric_exporter)
-    meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
-    metrics.set_meter_provider(meter_provider)
-
-    # --- OTLP Logging Setup (HTTP) ---
+    # --- OTLP Logging Setup ---
     # Create Logger Provider
     logger_provider = LoggerProvider(resource=resource)
     set_logger_provider(logger_provider)
 
-    # /v1/logs
+    # Create OTLP Log Exporter (HTTP)
+    # The endpoint should be full URL for HTTP exporter e.g. http://otel-collector:4318/v1/logs
+    # But often the exporter appends /v1/logs if missing.
+    # Let's trust the default behavior of the HTTP exporter with the base endpoint.
     otlp_log_exporter = OTLPLogExporter(
         endpoint=f"{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs"
     )
@@ -85,7 +62,7 @@ def setup_telemetry(app):
     # Add Batch Processor
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_log_exporter))
 
-    # Configure Structlog
+    # Output logs to stdout as JSON using structlog
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
@@ -112,14 +89,3 @@ def setup_telemetry(app):
     # Force uvicorn logs to use OTLP handler
     logging.getLogger("uvicorn.access").handlers = [otlp_handler, stdout_handler]
     logging.getLogger("uvicorn.error").handlers = [otlp_handler, stdout_handler]
-
-    # Instrument FastAPI
-    FastAPIInstrumentor.instrument_app(
-        app, tracer_provider=trace_provider, meter_provider=meter_provider
-    )
-
-    # Log initialization
-    log = structlog.get_logger()
-    log.info(
-        "Telemetry and Structlog initialized", service_name=settings.OTEL_SERVICE_NAME
-    )

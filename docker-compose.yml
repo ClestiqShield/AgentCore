@@ -10,7 +10,7 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/clestiq_shield
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=clestiq-shield-gateway
       - SENTINEL_SERVICE_URL=http://sentinel:8001
       - TELEMETRY_ENABLED=true
@@ -38,7 +38,7 @@ services:
       - "8003"
     environment:
       - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/clestiq_shield
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=clestiq-shield-eagle-eye
       - TELEMETRY_ENABLED=true
       - SECRET_KEY=change_this_to_a_strong_secret_key
@@ -65,7 +65,7 @@ services:
     expose:
       - "8001"
     environment:
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=clestiq-shield-sentinel
       - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - GCP_LOCATION=${GCP_LOCATION:-us-east1}
@@ -109,7 +109,7 @@ services:
     expose:
       - "8002"
     environment:
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=clestiq-shield-guardian
       - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - GCP_LOCATION=${GCP_LOCATION:-us-east1}
@@ -161,6 +161,7 @@ services:
     environment:
       - DD_API_KEY=${DD_API_KEY}
       - DD_SITE=${DD_SITE:-datadoghq.com}
+      - DEPLOYMENT_ENV=development
     volumes:
       - ./services/otel-collector/config.yaml:/etc/otel-collector-config.yaml:ro
     ports:

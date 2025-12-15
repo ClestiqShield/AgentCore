@@ -22,7 +22,7 @@ processors:
 
       # 1. Source Tag: Datadog looks for 'ddsource'
       - key: ddsource
-        value: clestiq-shield
+        value: clestiq-shield-development
         action: upsert
 
 exporters:

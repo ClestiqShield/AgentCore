@@ -18,6 +18,9 @@ settings = get_settings()
 setup_logging()
 logger = structlog.get_logger()
 
+from app.api.deps import get_current_user
+from fastapi import Depends
+
 # Import endpoints after logging is configured
 from app.api.v1.endpoints import auth, users, apps, api_keys
 
@@ -67,9 +70,21 @@ app = FastAPI(
 setup_telemetry(app)
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
-app.include_router(users.router, prefix="/users", tags=["users"])
-app.include_router(apps.router, prefix="/apps", tags=["apps"])
-app.include_router(api_keys.router, tags=["api-keys"])
+app.include_router(
+    users.router,
+    prefix="/users",
+    tags=["users"],
+    dependencies=[Depends(get_current_user)],
+)
+app.include_router(
+    apps.router,
+    prefix="/apps",
+    tags=["apps"],
+    dependencies=[Depends(get_current_user)],
+)
+app.include_router(
+    api_keys.router, tags=["api-keys"], dependencies=[Depends(get_current_user)]
+)
 
 
 @app.get("/health")

@@ -224,6 +224,9 @@ services:
       - DD_SYSTEM_PROBE_SERVICE_MONITORING_ENABLED=true
       # Profiling intake
       - DD_PROFILING_AGENTLESS=false
+      # Service Monitoring
+      - DD_SERVICE_MONITORING_ENABLED=true
+      - DD_PROCESS_CONFIG_PROCESS_COLLECTION_ENABLED=true
     ports:
       - "8126:8126" # APM traces
       - "8125:8125/udp" # DogStatsD metrics (fallback)
@@ -231,6 +234,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /proc/:/host/proc/:ro
       - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /opt/datadog-agent/run:/opt/datadog-agent/run:rw
       - dogstatsd-socket:/var/run/datadog
     cap_add:
       - SYS_ADMIN

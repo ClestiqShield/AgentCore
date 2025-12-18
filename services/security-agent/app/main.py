@@ -18,16 +18,31 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, lifespan=lifespan)
 
+print("DEBUG: Setting up telemetry...", flush=True)
 # Setup telemetry IMMEDIATELY
 setup_telemetry(app)
+print("DEBUG: Telemetry setup complete", flush=True)
 
 # Initialize global logger after telemetry
+print("DEBUG: Initializing structlog...", flush=True)
 logger = structlog.get_logger()
+print("DEBUG: Structlog initialized", flush=True)
 
 # Import modules AFTER logging is configured
-from app.agents.graph import agent_graph
+print("DEBUG: Importing app.agents.graph...", flush=True)
+try:
+    from app.agents.graph import agent_graph
+    print("DEBUG: Imported app.agents.graph successfully", flush=True)
+except Exception as e:
+    print(f"DEBUG: Failed to import app.agents.graph: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
+    raise
+
+print("DEBUG: Importing schemas and metrics...", flush=True)
 from app.schemas.security import ChatRequest, ChatResponse
 from app.core.metrics import get_security_metrics
+print("DEBUG: Imports completed successfully", flush=True)
 
 
 @app.get("/health")

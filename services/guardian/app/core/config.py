@@ -6,15 +6,14 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Clestiq Shield - Guardian (Output Validation)"
     VERSION: str = "1.0.0"
 
-    # OpenTelemetry
+    # Datadog APM
     TELEMETRY_ENABLED: bool = True
-    OTEL_SERVICE_NAME: str = "clestiq-shield-guardian"
-    OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://otel-collector:4317"
+    DD_SERVICE: str = "clestiq-shield-guardian"
+    DD_ENV: str = "production"
+    DD_VERSION: str = "1.0.0"
 
-    # Google Cloud / Vertex AI
-    GCP_PROJECT_ID: str
-    GCP_LOCATION: str = "us-east1"
-    GOOGLE_APPLICATION_CREDENTIALS: str | None = None
+    # Gemini AI Studio
+    GEMINI_API_KEY: str
 
     # Moderation Settings
     DEFAULT_MODERATION_MODE: str = "moderate"  # strict, moderate, relaxed, raw

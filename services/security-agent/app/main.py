@@ -22,10 +22,19 @@ app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, lifespan=li
 setup_telemetry(app)
 
 # Initialize global logger after telemetry
+# Initialize global logger after telemetry
 logger = structlog.get_logger()
 
 # Import modules AFTER logging is configured
-from app.agents.graph import agent_graph
+# Import modules AFTER logging is configured
+try:
+    from app.agents.graph import agent_graph
+except Exception as e:
+    import traceback
+
+    traceback.print_exc()
+    raise
+
 from app.schemas.security import ChatRequest, ChatResponse
 from app.core.metrics import get_security_metrics
 
@@ -33,7 +42,7 @@ from app.core.metrics import get_security_metrics
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "ok", "service": settings.OTEL_SERVICE_NAME}
+    return {"status": "ok", "service": settings.DD_SERVICE}
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -45,6 +54,10 @@ async def chat(request: ChatRequest):
 
     All metrics automatically sent to Datadog via OTel.
     """
+    import time
+
+    import time
+
     logger.info(
         "Chat request received",
         client_ip=request.client_ip,
@@ -62,7 +75,11 @@ async def chat(request: ChatRequest):
         "metrics_data": None,
     }
 
-    result = await agent_graph.ainvoke(initial_state)
+    try:
+        result = await agent_graph.ainvoke(initial_state)
+    except Exception as e:
+        logger.error(f"Agent graph execution failed: {e}")
+        raise
 
     if result.get("is_blocked"):
         logger.warning("Request blocked", reason=result.get("block_reason"))

@@ -2,7 +2,8 @@ from typing import Dict, Any, List, Optional
 import time
 import json
 from datetime import datetime
-from langchain_google_vertexai import ChatVertexAI
+
+# from langchain_google_genai import ChatGoogleGenerativeAI - Moved to get_llm to avoid import-time issues
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from app.agents.state import AgentState
@@ -83,14 +84,22 @@ Analyze the input and provide JSON:
 Output ONLY JSON.
 """
 
-# Initialize LLM lazily to avoid import-time auth errors
+# Initialize LLM lazily to avoid import-time issues
 _llm = None
 
 
 def get_llm():
+    """Get or create the LLM instance (singleton pattern)."""
     global _llm
     if _llm is None:
-        _llm = ChatVertexAI(model_name="gemini-2.0-flash-exp")
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        settings = get_settings()
+        _llm = ChatGoogleGenerativeAI(
+            model=settings.LLM_MODEL_NAME,
+            google_api_key=settings.GEMINI_API_KEY,
+        )
+        logger.info("LLM initialized", model=settings.LLM_MODEL_NAME)
     return _llm
 
 
@@ -194,6 +203,7 @@ async def security_check(state: AgentState) -> Dict[str, Any]:
                 )
 
         # Step 3: Threat Detection
+        logger.info("Starting Threat Detection...")
         stage_start = time.perf_counter()
         threats = []
 
@@ -221,6 +231,7 @@ async def security_check(state: AgentState) -> Dict[str, Any]:
             threats.append(path_threat)
 
         stage_latency = (time.perf_counter() - stage_start) * 1000
+        logger.info(f"Threat Detection completed in {stage_latency:.2f}ms")
         metrics.record_stage_latency("threat_detection", stage_latency)
         metrics_builder.add_latency("threat_detection", stage_latency)
 
@@ -262,18 +273,43 @@ async def security_check(state: AgentState) -> Dict[str, Any]:
                     "metrics_data": metrics_builder.build(),
                 }
 
-        # Step 4: LLM-based Security Analysis
-        stage_start = time.perf_counter()
-        prompt = ChatPromptTemplate.from_template(SECURITY_PROMPT)
-        chain = prompt | get_llm() | JsonOutputParser()
+        # Step 4: LLM Security Analysis (if enabled)
+        llm_result = {}
+        if settings.SECURITY_LLM_CHECK_ENABLED:
+            # Reconstruct the chain manually as before
+            try:
+                from langchain_core.prompts import ChatPromptTemplate
+                from langchain_core.output_parsers import JsonOutputParser
 
-        llm_result = await chain.ainvoke(
-            {"input": user_input, "threshold": settings.SECURITY_LLM_CHECK_THRESHOLD}
-        )
+                prompt = ChatPromptTemplate.from_template(SECURITY_PROMPT)
+                llm = get_llm()
+                parser = JsonOutputParser()
 
-        stage_latency = (time.perf_counter() - stage_start) * 1000
-        metrics.record_stage_latency("llm_check", stage_latency)
-        metrics_builder.add_latency("llm_check", stage_latency)
+                chain = prompt | llm | parser
+            except Exception as e:
+                logger.error(f"Failed to initialize LLM chain: {e}")
+                raise
+
+            # Using current time for detailed timing
+            llm_start = time.perf_counter()
+
+            try:
+                # Add a timeout to the LLM call if possible or just log around it
+                llm_result = await chain.ainvoke(
+                    {
+                        "input": user_input,
+                        "threshold": settings.SECURITY_LLM_CHECK_THRESHOLD,
+                    }
+                )
+            except Exception as llm_exc:
+                logger.error(f"LLM chain raised exception: {llm_exc}")
+                # Depending on policy, you might want to block here or set a default score
+                # For now, re-raise to be caught by the outer try/except
+                raise
+
+            check_time_ms = (time.perf_counter() - llm_start) * 1000
+            metrics.record_stage_latency("llm_check", check_time_ms)
+            metrics_builder.add_latency("llm_check", check_time_ms)
 
         score = llm_result.get("security_score", 0.0)
         is_blocked = llm_result.get("is_blocked", False)

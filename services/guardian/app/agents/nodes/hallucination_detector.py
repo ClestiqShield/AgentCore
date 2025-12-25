@@ -30,7 +30,7 @@ def get_judge_llm():
 
         settings = get_settings()
         _judge_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
+            model="gemini-3-flash-preview",
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0,
         )
@@ -76,11 +76,14 @@ async def hallucination_detector_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     llm_response = state.get("llm_response", "")
     original_query = state.get("original_query", "")
-    guardrails = state.get("guardrails") or {}
 
-    # Check if hallucination check is enabled
-    if not guardrails.get("hallucination_check", False):
-        logger.info("Hallucination check SKIPPED - not enabled in guardrails")  # DEBUG
+    # Check if hallucination check is enabled via request
+    request = state.get("request")
+    if (
+        not request
+        or not request.config
+        or not request.config.enable_hallucination_detector
+    ):
         return state
 
     if not original_query or not llm_response:

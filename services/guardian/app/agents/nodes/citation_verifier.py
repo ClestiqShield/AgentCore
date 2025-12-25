@@ -83,15 +83,15 @@ async def citation_verifier_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Verify citations in LLM response.
     """
+    # Check if citation verification is enabled via request
+    request = state.get("request")
+    if not request or not request.config or not request.config.enable_citation_verifier:
+        return state
+
     metrics = get_guardian_metrics()
     start_time = time.perf_counter()
 
     llm_response = state.get("llm_response", "")
-    guardrails = state.get("guardrails") or {}
-
-    # Check if citation verification is enabled
-    if not guardrails.get("citation_verification", False):
-        return state
 
     if not llm_response:
         return state

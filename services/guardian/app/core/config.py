@@ -23,11 +23,11 @@ class Settings(BaseSettings):
     INAPPROPRIATE_CONTENT_THRESHOLD: float = 0.6
     SENSITIVE_CONTENT_THRESHOLD: float = 0.5
 
-    # PII Detection in Output
-    OUTPUT_PII_DETECTION_ENABLED: bool = True
+    # PII Detection in Output (default False - opt-in via request)
+    OUTPUT_PII_DETECTION_ENABLED: bool = False
 
-    # Response Format
-    AUTO_CONVERT_TOON_TO_JSON: bool = True
+    # Response Format (default False - opt-in via request)
+    AUTO_CONVERT_TOON_TO_JSON: bool = False
 
     class Config:
         case_sensitive = True

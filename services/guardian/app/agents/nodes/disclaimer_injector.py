@@ -108,15 +108,19 @@ async def disclaimer_injector_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Detect advice type and inject appropriate disclaimers.
     """
+    # Check if disclaimer injection is enabled via request
+    request = state.get("request")
+    if (
+        not request
+        or not request.config
+        or not request.config.enable_disclaimer_injector
+    ):
+        return state
+
     metrics = get_guardian_metrics()
     start_time = time.perf_counter()
 
     llm_response = state.get("llm_response", "")
-    guardrails = state.get("guardrails") or {}
-
-    # Check if auto_disclaimers is enabled
-    if not guardrails.get("auto_disclaimers", False):
-        return state
 
     if not llm_response:
         return state

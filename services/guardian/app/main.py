@@ -32,16 +32,20 @@ print("DEBUG: Structlog initialized", flush=True)
 print("DEBUG: Importing app.agents.graph...", flush=True)
 try:
     from app.agents.graph import guardian_graph
+
     print("DEBUG: Imported app.agents.graph successfully", flush=True)
 except Exception as e:
     print(f"DEBUG: Failed to import app.agents.graph: {e}", flush=True)
     import traceback
+
     traceback.print_exc()
     raise
 
 print("DEBUG: Importing schemas and metrics...", flush=True)
-from app.schemas.validation import ValidateRequest, ValidateResponse
+print("DEBUG: Importing schemas and metrics...", flush=True)
+from app.schemas.validation import ValidateRequest, ValidateResponse, ValidateMetrics
 from app.core.metrics import get_guardian_metrics
+
 print("DEBUG: Imports completed successfully", flush=True)
 
 
@@ -55,7 +59,9 @@ async def health_check():
     }
 
 
-@app.post("/validate", response_model=ValidateResponse)
+@app.post(
+    "/validate", response_model=ValidateResponse, response_model_exclude_none=True
+)
 async def validate(request: ValidateRequest):
     """
     Validate and filter LLM response.
@@ -89,6 +95,7 @@ async def validate(request: ValidateRequest):
         "validated_response": None,
         "validation_passed": True,
         "metrics_data": None,
+        "request": request,  # Pass request for feature flags
     }
 
     result = await guardian_graph.ainvoke(initial_state)
@@ -120,16 +127,8 @@ async def validate(request: ValidateRequest):
             was_toon=result.get("was_toon", False),
         )
 
-    return ValidateResponse(
-        validated_response=validated_response,
-        validation_passed=validation_passed,
-        content_blocked=result.get("content_blocked", False),
-        content_block_reason=result.get("content_block_reason"),
-        content_warnings=result.get("content_warnings"),
-        output_pii_leaks=result.get("output_pii_leaks"),
-        output_redacted=result.get("output_redacted", False),
-        was_toon=result.get("was_toon", False),
-        # NEW: Advanced validation results
+    # Construct Metrics
+    metrics_obj = ValidateMetrics(
         hallucination_detected=result.get("hallucination_detected"),
         hallucination_details=result.get("hallucination_details"),
         citations_verified=result.get("citations_verified"),
@@ -141,9 +140,19 @@ async def validate(request: ValidateRequest):
         false_refusal_detected=result.get("false_refusal_detected"),
         toxicity_score=result.get("toxicity_score"),
         toxicity_details=result.get("toxicity_details"),
-        metrics={
-            "moderation_mode": request.moderation_mode,
-            "warnings_count": len(result.get("content_warnings", [])),
-            "pii_leaks_count": len(result.get("output_pii_leaks", [])),
-        },
+        warnings_count=len(result.get("content_warnings", [])),
+        pii_leaks_count=len(result.get("output_pii_leaks", [])),
+        moderation_mode=request.moderation_mode,
+    )
+
+    return ValidateResponse(
+        validated_response=validated_response,
+        validation_passed=validation_passed,
+        content_blocked=result.get("content_blocked", False),
+        content_block_reason=result.get("content_block_reason"),
+        content_warnings=result.get("content_warnings"),
+        output_pii_leaks=result.get("output_pii_leaks"),
+        output_redacted=result.get("output_redacted", False),
+        was_toon=result.get("was_toon", False),
+        metrics=metrics_obj,
     )

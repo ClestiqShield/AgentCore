@@ -9,64 +9,44 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 
-class GuardrailsConfig(BaseModel):
-    """Guardrails configuration for security features."""
+class SecuritySettings(BaseModel):
+    """Unified security and validation settings."""
 
-    content_filtering: bool = Field(
-        default=True, description="Enable content moderation and filtering"
-    )
-    pii_detection: bool = Field(
-        default=True, description="Enable PII detection and redaction"
-    )
-    threat_detection: bool = Field(
-        default=True, description="Enable threat/injection detection"
+    # Privacy
+    pii_masking: bool = Field(False, description="Enable PII detection/masking")
+
+    # Input Security
+    sanitize_input: bool = Field(False, description="Enable input sanitization")
+    detect_threats: bool = Field(
+        False, description="Enable threat detection (SQLi, XSS, etc)"
     )
 
-    # NEW: Advanced Guardian validation features
+    # Output Validation
+    content_filter: bool = Field(False, description="Enable content toxicity filtering")
     hallucination_check: bool = Field(
-        default=False, description="Enable hallucination detection using Judge LLM"
+        False, description="Enable hallucination detection"
     )
-    citation_verification: bool = Field(
-        default=False, description="Enable citation and source verification"
-    )
-    brand_tone: Optional[str] = Field(
-        default=None,
-        description="Enforce brand tone: professional, casual, technical, or friendly",
-    )
-    auto_disclaimers: bool = Field(
-        default=False,
-        description="Automatically inject legal disclaimers for medical/financial advice",
-    )
-    false_refusal_check: bool = Field(
-        default=False, description="Detect when LLM incorrectly refuses valid requests"
-    )
-    toxicity_threshold: float = Field(
-        default=0.7, description="Toxicity threshold (0.0-1.0) for blocking responses"
-    )
+    citation_check: bool = Field(False, description="Enable citation verification")
+    tone_check: bool = Field(False, description="Enable tone consistency check")
+
+    # Advanced / Misc
+    toon_mode: bool = Field(False, description="Enable TOON format conversion")
+    enable_llm_forward: bool = Field(False, description="Enable LLM forwarding")
 
 
 class GatewayRequest(BaseModel):
     """
-    Enhanced gateway request with explicit fields.
-
-    Example:
-        {
-            "query": "What is machine learning?",
-            "model": "gemini-2.0-flash",
-            "moderation": "moderate",
-            "output_format": "json",
-            "guardrails": {
-                "content_filtering": true,
-                "pii_detection": true,
-                "threat_detection": true
-            }
-        }
+    Enhanced gateway request with nested settings.
     """
 
     query: str = Field(..., description="User query/prompt to process")
+    system_prompt: Optional[str] = Field(
+        default="You are a helpful AI assistant.",
+        description="System prompt to guide LLM behavior",
+    )
     model: str = Field(
-        default="gemini-2.0-flash",
-        description="LLM model to use (gemini-2.0-flash, gemini-2.0, etc.)",
+        default="gemini-3-flash-preview",
+        description="LLM model to use",
     )
     moderation: str = Field(
         default="moderate",
@@ -75,8 +55,12 @@ class GatewayRequest(BaseModel):
     output_format: str = Field(
         default="json", description="Output format: json or toon"
     )
-    guardrails: Optional[GuardrailsConfig] = Field(
-        default=None, description="Optional guardrails configuration"
+    max_output_tokens: Optional[int] = Field(
+        default=None, description="Max tokens for LLM response"
+    )
+
+    settings: SecuritySettings = Field(
+        default_factory=SecuritySettings, description="Security and validation settings"
     )
 
 

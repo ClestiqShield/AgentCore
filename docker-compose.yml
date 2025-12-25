@@ -81,7 +81,7 @@ services:
       retries: 3
       start_period: 40s
 
-  # Sentinel - Input Security Agent (internal only)
+  # Sentinel - Input Security Agent (now publicly accessible for testing)
   sentinel:
     build:
       context: ./services/security-agent
@@ -100,18 +100,17 @@ services:
       - DD_RUNTIME_METRICS_ENABLED=true
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - TELEMETRY_ENABLED=true
-      # Security Settings
-      - SECURITY_SANITIZATION_ENABLED=true
-      - SECURITY_PII_REDACTION_ENABLED=true
-      - SECURITY_XSS_PROTECTION_ENABLED=true
-      - SECURITY_SQL_INJECTION_DETECTION_ENABLED=true
-      - SECURITY_COMMAND_INJECTION_DETECTION_ENABLED=true
-      - SECURITY_LLM_CHECK_THRESHOLD=0.85
-      # TOON Conversion
-      - TOON_CONVERSION_ENABLED=true
-      # LLM Settings
-      - LLM_FORWARD_ENABLED=true
-      - LLM_MODEL_NAME=gemini-2.5-flash
+      # Security Settings (defaults to False - opt-in via request)
+      - SECURITY_SANITIZATION_ENABLED=false
+      - SECURITY_PII_REDACTION_ENABLED=false
+      - SECURITY_XSS_PROTECTION_ENABLED=false
+      - SECURITY_SQL_INJECTION_DETECTION_ENABLED=false
+      - SECURITY_COMMAND_INJECTION_DETECTION_ENABLED=false
+      # TOON Conversion (default False - opt-in via request)
+      - TOON_CONVERSION_ENABLED=false
+      # LLM Settings (default False - opt-in via request)
+      - LLM_FORWARD_ENABLED=false
+      - LLM_MODEL_NAME=gemini-3-flash-preview
       - LLM_MAX_TOKENS=8192
       # Guardian Service URL
       - GUARDIAN_SERVICE_URL=http://guardian:8002
@@ -157,8 +156,9 @@ services:
       - DEFAULT_MODERATION_MODE=moderate
       - HARMFUL_CONTENT_THRESHOLD=0.7
       - INAPPROPRIATE_CONTENT_THRESHOLD=0.6
-      - OUTPUT_PII_DETECTION_ENABLED=true
-      - AUTO_CONVERT_TOON_TO_JSON=true
+      # PII & TOON (defaults to False - opt-in via request)
+      - OUTPUT_PII_DETECTION_ENABLED=false
+      - AUTO_CONVERT_TOON_TO_JSON=false
     depends_on:
       - datadog-agent
     volumes:

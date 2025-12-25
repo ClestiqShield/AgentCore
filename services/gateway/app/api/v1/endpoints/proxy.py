@@ -95,6 +95,23 @@ async def proxy_request(
                         "input": sentinel_input,
                         "client_ip": client_ip,
                         "user_agent": user_agent,
+                        # Pass Sentinel feature flags
+                        "enable_sanitization": body.enable_sanitization,
+                        "enable_pii_redaction": body.enable_pii_redaction,
+                        "enable_xss_protection": body.enable_xss_protection,
+                        "enable_sql_injection_detection": body.enable_sql_injection_detection,
+                        "enable_command_injection_detection": body.enable_command_injection_detection,
+                        "enable_toon_conversion": body.enable_toon_conversion,
+                        "enable_llm_forward": body.enable_llm_forward,
+                        # Pass Guardian feature flags (Sentinel will forward to Guardian)
+                        "enable_content_filter": body.enable_content_filter,
+                        "enable_pii_scanner": body.enable_pii_scanner,
+                        "enable_toon_decoder": body.enable_toon_decoder,
+                        "enable_hallucination_detector": body.enable_hallucination_detector,
+                        "enable_citation_verifier": body.enable_citation_verifier,
+                        "enable_tone_checker": body.enable_tone_checker,
+                        "enable_refusal_detector": body.enable_refusal_detector,
+                        "enable_disclaimer_injector": body.enable_disclaimer_injector,
                     },
                 )
 

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import structlog
+import time
 
 from app.core.config import get_settings
 from app.core.telemetry import setup_telemetry
@@ -35,7 +36,12 @@ except Exception as e:
     traceback.print_exc()
     raise
 
-from app.schemas.security import ChatRequest, ChatResponse
+from app.schemas.security import (
+    ChatRequest,
+    ChatResponse,
+    SecurityMetrics,
+    GuardianMetrics,
+)
 from app.core.metrics import get_security_metrics
 
 
@@ -45,18 +51,14 @@ async def health_check():
     return {"status": "ok", "service": settings.DD_SERVICE}
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse, response_model_exclude_none=True)
 async def chat(request: ChatRequest):
     """
-    Core endpoint for processing user queries through the security pipeline.
-
-    Flow: Input → Sanitization → PII → Threats → LLM → Guardian → Response
+    Process a chat request through the security graph.
 
     All metrics automatically sent to Datadog via OTel.
     """
-    import time
-
-    import time
+    start_time = time.perf_counter()
 
     logger.info(
         "Chat request received",
@@ -73,6 +75,7 @@ async def chat(request: ChatRequest):
         "client_ip": request.client_ip,
         "user_agent": request.user_agent,
         "metrics_data": None,
+        "request": request,  # Pass request for feature flags
     }
 
     try:
@@ -81,6 +84,8 @@ async def chat(request: ChatRequest):
         logger.error(f"Agent graph execution failed: {e}")
         raise
 
+    processing_time_ms = (time.perf_counter() - start_time) * 1000
+
     if result.get("is_blocked"):
         logger.warning("Request blocked", reason=result.get("block_reason"))
     else:
@@ -88,28 +93,47 @@ async def chat(request: ChatRequest):
             "Request processed",
             model=request.input.get("model", settings.LLM_MODEL_NAME),
             tokens_saved=result.get("token_savings", 0),
+            processing_time_ms=round(processing_time_ms, 2),
         )
 
-    # Extract Guardian validation results
-    guardian_validation = result.get("guardian_validation", {})
+    # Construct Guardian Metrics (only if available)
+    guardian_metrics = None
+    if request.guardian_config:  # Only build if Guardian was potentially involved
+        # Check if we have any actual guardian results manually to avoid sending empty object
+        # Or just filter based on config.
+        # But for now, let's just map the fields.
+        g_metrics = GuardianMetrics(
+            hallucination_detected=result.get("hallucination_detected"),
+            citations_verified=result.get("citations_verified"),
+            tone_compliant=result.get("tone_compliant"),
+            disclaimer_injected=result.get("disclaimer_injected"),
+            false_refusal_detected=result.get("false_refusal_detected"),
+            toxicity_score=result.get("toxicity_score"),
+        )
+        # Only attach if at least one field is not None?
+        # Pydantic's exclude_none will handle the serialization, but we want to avoid returning an empty "guardian_metrics": {} if possible.
+        # However, ChatResponse.metrics.guardian_metrics is Optional.
+        # If we assign it an object with all Nones, exclude_none on the parent *should* strip keys inside, but leave guardian_metrics as empty dict?
+        # Actually exclude_none is recursive. So if g_metrics has all None, it serializes to {}.
+        # Ideally we prefer it to be None in that case.
+        if any(v is not None for v in g_metrics.model_dump().values()):
+            guardian_metrics = g_metrics
+
+    # Construct Security Metrics
+    metrics = SecurityMetrics(
+        security_score=result.get("security_score", 0.0),
+        tokens_saved=result.get("token_savings", 0),
+        llm_tokens=result.get("llm_tokens_used"),
+        model_used=result.get("model_used"),
+        threats_detected=len(result.get("detected_threats", [])),
+        pii_redacted=len(result.get("pii_detections", [])),
+        processing_time_ms=round(processing_time_ms, 2),
+        guardian_metrics=guardian_metrics,
+    )
 
     return ChatResponse(
         is_blocked=result.get("is_blocked", False),
         block_reason=result.get("block_reason"),
         llm_response=result.get("llm_response"),
-        metrics={
-            "security_score": result.get("security_score", 0.0),
-            "tokens_saved": result.get("token_savings", 0),
-            "llm_tokens": result.get("llm_tokens_used"),
-            "model_used": result.get("model_used"),
-            "threats_detected": len(result.get("detected_threats", [])),
-            "pii_redacted": len(result.get("pii_detections", [])),
-            # NEW: Guardian validation results
-            "hallucination_detected": guardian_validation.get("hallucination_detected"),
-            "citations_verified": guardian_validation.get("citations_verified"),
-            "tone_compliant": guardian_validation.get("tone_compliant"),
-            "disclaimer_injected": guardian_validation.get("disclaimer_injected"),
-            "false_refusal_detected": guardian_validation.get("false_refusal_detected"),
-            "toxicity_score": guardian_validation.get("toxicity_score"),
-        },
+        metrics=metrics,
     )

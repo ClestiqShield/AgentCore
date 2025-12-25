@@ -209,12 +209,23 @@ class PIIRedactor:
         # Counter for each PII type
         counters = {"SSN": 0, "CREDIT_CARD": 0, "EMAIL": 0, "PHONE": 0}
 
-        # 1. Pseudonymize SSN
+        # 1. Pseudonymize SSN (both formats)
         for match in PIIRedactor.SSN_PATTERN.finditer(text):
             counters["SSN"] += 1
             token = f"<SSN_{counters['SSN']}>"
             mapping[token] = match.group(0)
             pseudonymized_text = pseudonymized_text.replace(match.group(0), token, 1)
+
+        # Also check for continuous 9-digit SSNs
+        for match in PIIRedactor.SSN_PATTERN_ALT.finditer(pseudonymized_text):
+            # Only match if not already replaced
+            if not match.group(0).startswith("<"):
+                counters["SSN"] += 1
+                token = f"<SSN_{counters['SSN']}>"
+                mapping[token] = match.group(0)
+                pseudonymized_text = pseudonymized_text.replace(
+                    match.group(0), token, 1
+                )
 
         if counters["SSN"] > 0:
             detections.append({"type": "SSN", "count": counters["SSN"]})

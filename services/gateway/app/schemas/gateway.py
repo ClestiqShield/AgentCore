@@ -47,26 +47,22 @@ class GuardrailsConfig(BaseModel):
 
 class GatewayRequest(BaseModel):
     """
-    Enhanced gateway request with explicit fields.
+    Enhanced gateway request with opt-in feature flags.
 
     Example:
         {
             "query": "What is machine learning?",
-            "model": "gemini-2.0-flash",
-            "moderation": "moderate",
-            "output_format": "json",
-            "guardrails": {
-                "content_filtering": true,
-                "pii_detection": true,
-                "threat_detection": true
-            }
+            "model": "gemini-3-flash-preview",
+            "enable_llm_forward": true,
+            "enable_pii_redaction": true,
+            "enable_content_filter": true
         }
     """
 
     query: str = Field(..., description="User query/prompt to process")
     model: str = Field(
-        default="gemini-2.0-flash",
-        description="LLM model to use (gemini-2.0-flash, gemini-2.0, etc.)",
+        default="gemini-3-flash-preview",
+        description="LLM model to use",
     )
     moderation: str = Field(
         default="moderate",
@@ -75,8 +71,57 @@ class GatewayRequest(BaseModel):
     output_format: str = Field(
         default="json", description="Output format: json or toon"
     )
+
+    # Sentinel Feature Flags (opt-in, defaults to False)
+    enable_sanitization: bool = Field(
+        default=False, description="Enable input sanitization"
+    )
+    enable_pii_redaction: bool = Field(
+        default=False, description="Enable PII detection and redaction"
+    )
+    enable_xss_protection: bool = Field(
+        default=False, description="Enable XSS attack detection"
+    )
+    enable_sql_injection_detection: bool = Field(
+        default=False, description="Enable SQL injection detection"
+    )
+    enable_command_injection_detection: bool = Field(
+        default=False, description="Enable command injection detection"
+    )
+    enable_toon_conversion: bool = Field(
+        default=False, description="Enable TOON compression"
+    )
+    enable_llm_forward: bool = Field(
+        default=False, description="Enable LLM response generation"
+    )
+
+    # Guardian Feature Flags (opt-in, defaults to False)
+    enable_content_filter: bool = Field(
+        default=False, description="Enable toxicity/content filtering"
+    )
+    enable_pii_scanner: bool = Field(
+        default=False, description="Enable output PII scanning"
+    )
+    enable_toon_decoder: bool = Field(default=False, description="Enable TOON decoding")
+    enable_hallucination_detector: bool = Field(
+        default=False, description="Enable hallucination detection"
+    )
+    enable_citation_verifier: bool = Field(
+        default=False, description="Enable citation verification"
+    )
+    enable_tone_checker: bool = Field(
+        default=False, description="Enable brand tone checking"
+    )
+    enable_refusal_detector: bool = Field(
+        default=False, description="Enable false refusal detection"
+    )
+    enable_disclaimer_injector: bool = Field(
+        default=False, description="Enable automatic disclaimer injection"
+    )
+
+    # Legacy guardrails (optional, for backwards compatibility)
     guardrails: Optional[GuardrailsConfig] = Field(
-        default=None, description="Optional guardrails configuration"
+        default=None, description="Optional guardrails configuration (deprecated)"
     )
 
 

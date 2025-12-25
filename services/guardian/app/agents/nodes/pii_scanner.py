@@ -83,6 +83,11 @@ async def pii_scanner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Scan LLM output for PII leaks and optionally redact.
     """
+    # Check if PII scanner is enabled via request
+    request = state.get("request")
+    if not request or not request.config or not request.config.enable_pii_scanner:
+        return {**state, "output_pii_leaks": [], "output_redacted": False}
+
     metrics = get_guardian_metrics()
     start_time = time.perf_counter()
 

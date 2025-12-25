@@ -40,15 +40,15 @@ async def refusal_detector_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Detect false refusals (LLM refusing valid requests).
     """
+    # Check if refusal detection is enabled via request
+    request = state.get("request")
+    if not request or not request.config or not request.config.enable_refusal_detector:
+        return state
+
     metrics = get_guardian_metrics()
     start_time = time.perf_counter()
 
     llm_response = state.get("llm_response", "")
-    guardrails = state.get("guardrails") or {}
-
-    # Check if false_refusal_check is enabled
-    if not guardrails.get("false_refusal_check", False):
-        return state
 
     if not llm_response:
         return state

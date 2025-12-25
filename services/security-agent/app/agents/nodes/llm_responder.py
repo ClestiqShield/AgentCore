@@ -19,8 +19,9 @@ logger = structlog.get_logger()
 
 # Gemini Models Only (for now)
 SUPPORTED_MODELS = {
-    "gemini-2.5-flash": "gemini-2.5-flash",
-    "default": "gemini-2.5-flash",
+    "gemini-3-pro-preview": "gemini-3-pro-preview",
+    "gemini-3-flash-preview": "gemini-3-flash-preview",
+    "default": "gemini-3-flash-preview",
 }
 
 _llm_cache: Dict[str, Any] = {}
@@ -69,6 +70,15 @@ async def call_guardian(
     output_format: str = "json",
     guardrails: Optional[Dict[str, Any]] = None,
     original_query: Optional[str] = None,
+    # Guardian feature flags
+    enable_content_filter: bool = False,
+    enable_pii_scanner: bool = False,
+    enable_toon_decoder: bool = False,
+    enable_hallucination_detector: bool = False,
+    enable_citation_verifier: bool = False,
+    enable_tone_checker: bool = False,
+    enable_refusal_detector: bool = False,
+    enable_disclaimer_injector: bool = False,
 ) -> Dict[str, Any]:
     """Call Guardian for output validation."""
     settings = get_settings()
@@ -83,6 +93,17 @@ async def call_guardian(
                     "output_format": output_format,
                     "guardrails": guardrails,
                     "original_query": original_query,
+                    # Pass Guardian feature flags via structured config
+                    "config": {
+                        "enable_content_filter": enable_content_filter,
+                        "enable_pii_scanner": enable_pii_scanner,
+                        "enable_toon_decoder": enable_toon_decoder,
+                        "enable_hallucination_detector": enable_hallucination_detector,
+                        "enable_citation_verifier": enable_citation_verifier,
+                        "enable_tone_checker": enable_tone_checker,
+                        "enable_refusal_detector": enable_refusal_detector,
+                        "enable_disclaimer_injector": enable_disclaimer_injector,
+                    },
                 },
             )
             response.raise_for_status()
@@ -94,13 +115,14 @@ async def call_guardian(
 
 async def llm_responder_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """LangGraph node for LLM response."""
-    settings = get_settings()
     metrics = get_security_metrics()
 
     if state.get("is_blocked"):
         return state
 
-    if not settings.LLM_FORWARD_ENABLED:
+    # Check if LLM forward is enabled via request
+    request = state.get("request")
+    if not request or not request.sentinel_config.enable_llm_forward:
         return state
 
     # Get query
@@ -167,6 +189,31 @@ async def llm_responder_node(state: Dict[str, Any]) -> Dict[str, Any]:
             output_format,
             guardrails=guardrails,
             original_query=original_query,
+            # Pass Guardian feature flags from request
+            enable_content_filter=request.guardian_config.enable_content_filter
+            if request and request.guardian_config
+            else False,
+            enable_pii_scanner=request.guardian_config.enable_pii_scanner
+            if request and request.guardian_config
+            else False,
+            enable_toon_decoder=request.guardian_config.enable_toon_decoder
+            if request and request.guardian_config
+            else False,
+            enable_hallucination_detector=request.guardian_config.enable_hallucination_detector
+            if request and request.guardian_config
+            else False,
+            enable_citation_verifier=request.guardian_config.enable_citation_verifier
+            if request and request.guardian_config
+            else False,
+            enable_tone_checker=request.guardian_config.enable_tone_checker
+            if request and request.guardian_config
+            else False,
+            enable_refusal_detector=request.guardian_config.enable_refusal_detector
+            if request and request.guardian_config
+            else False,
+            enable_disclaimer_injector=request.guardian_config.enable_disclaimer_injector
+            if request and request.guardian_config
+            else False,
         )
 
         # DEBUG: Log what Guardian returned

@@ -40,3 +40,6 @@ class AgentState(TypedDict):
     # Metadata
     client_ip: Optional[str]
     user_agent: Optional[str]
+
+    # Request object (for feature flags)
+    request: Optional[Any]  # ChatRequest object

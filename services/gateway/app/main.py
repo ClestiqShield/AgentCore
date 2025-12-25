@@ -43,12 +43,12 @@ setup_telemetry(app)
 logger = structlog.get_logger()
 
 # Import endpoints AFTER logging is configured
-from app.api.v1.endpoints import proxy, router_eagleeye
+from app.api.v1.endpoints import chat, router_eagleeye
 
 # Setup telemetry after app creation but before startup
 setup_telemetry(app)
 
-app.include_router(proxy.router, prefix="/api/v1/proxy", tags=["proxy"])
+app.include_router(chat.router, prefix="/chat", tags=["chat"])
 
 # Dynamic Proxy for EagleEye (Auth, Users, Apps, Keys)
 # We want to forward /api/v1/auth, /api/v1/users, /api/v1/apps (override?)

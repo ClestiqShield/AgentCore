@@ -86,8 +86,8 @@ services:
     build:
       context: ./services/security-agent
       dockerfile: Dockerfile
-    ports:
-      - "8001:8001" # Exposed for direct testing
+    expose:
+      - "8001"
     environment:
       - DD_ENV=development
       - DD_SERVICE=clestiq-shield-sentinel

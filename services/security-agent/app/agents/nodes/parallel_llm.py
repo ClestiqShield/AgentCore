@@ -70,8 +70,11 @@ async def parallel_llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # Define parallel tasks
         async def generate_response():
             """Generate user response"""
+            sys_prompt_text = (
+                input_data.get("system_prompt") or "You are a helpful AI assistant."
+            )
             messages = [
-                SystemMessage(content="You are a helpful AI assistant."),
+                SystemMessage(content=sys_prompt_text),
                 HumanMessage(content=query),
             ]
 

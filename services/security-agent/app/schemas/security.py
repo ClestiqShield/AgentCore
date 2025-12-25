@@ -27,6 +27,7 @@ class ChatRequest(BaseModel):
     """Simplified request schema."""
 
     query: str
+    system_prompt: Optional[str] = "You are a helpful AI assistant."
     model: str = "gemini-3-flash-preview"
     moderation: str = "moderate"
     output_format: str = "json"

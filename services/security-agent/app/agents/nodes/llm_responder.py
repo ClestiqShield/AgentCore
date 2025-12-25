@@ -168,8 +168,11 @@ async def llm_responder_node(state: Dict[str, Any]) -> Dict[str, Any]:
     try:
         llm = get_llm(model_name, max_tokens=max_output_tokens)
 
+        sys_prompt_text = (
+            input_data.get("system_prompt") or "You are a helpful AI assistant."
+        )
         messages = [
-            SystemMessage(content="You are a helpful AI assistant."),
+            SystemMessage(content=sys_prompt_text),
             HumanMessage(content=query),
         ]
 

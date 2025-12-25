@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import structlog
-import time
+
 
 from app.core.config import get_settings
 from app.core.telemetry import setup_telemetry
@@ -61,8 +61,6 @@ async def chat(request: ChatRequest):
     """
     logger.info("Received chat request", model=request.model)
 
-    start_time = time.perf_counter()
-
     # Map Simplified Settings to Internal Configs
     settings = request.settings
 
@@ -120,8 +118,6 @@ async def chat(request: ChatRequest):
         logger.error(f"Agent graph execution failed: {e}")
         raise
 
-    processing_time_ms = (time.perf_counter() - start_time) * 1000
-
     if result.get("is_blocked"):
         logger.warning("Request blocked", reason=result.get("block_reason"))
     else:
@@ -129,7 +125,6 @@ async def chat(request: ChatRequest):
             "Request processed",
             model=request.model,
             tokens_saved=result.get("token_savings", 0),
-            processing_time_ms=round(processing_time_ms, 2),
         )
 
     # Construct Guardian Metrics
@@ -156,7 +151,6 @@ async def chat(request: ChatRequest):
         model_used=result.get("model_used"),
         threats_detected=len(result.get("detected_threats", [])),
         pii_redacted=len(result.get("pii_detections", [])),
-        processing_time_ms=round(processing_time_ms, 2),
         guardian_metrics=guardian_metrics,
     )
 

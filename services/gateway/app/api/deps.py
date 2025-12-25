@@ -7,7 +7,6 @@ import hashlib
 import structlog
 
 from app.core.db import get_db
-from app.models.application import Application
 from app.models.api_key import ApiKey
 
 logger = structlog.get_logger()
@@ -15,9 +14,9 @@ logger = structlog.get_logger()
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
-async def get_current_app(
+async def get_api_key(
     api_key: str = Security(api_key_header), db: AsyncSession = Depends(get_db)
-) -> Application:
+) -> ApiKey:
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -42,8 +41,4 @@ async def get_current_app(
             detail="Invalid API Key",
         )
 
-    # Update last_used_at (optional, can be done async or skipped for performance)
-    # api_key_obj.last_used = func.now()
-    # await db.commit()
-
-    return api_key_obj.application
+    return api_key_obj

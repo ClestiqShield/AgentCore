@@ -5,9 +5,10 @@ import httpx
 import structlog
 from opentelemetry import trace
 
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
-from app.models.application import Application
 from app.core.config import get_settings
+from app.models.api_key import ApiKey
 from app.schemas.gateway import (
     GatewayRequest,
     GatewayResponse,
@@ -26,7 +27,8 @@ tracer = trace.get_tracer(__name__)
 async def chat_request(
     request: Request,
     body: GatewayRequest,
-    current_app: Application = Depends(deps.get_current_app),
+    api_key: ApiKey = Depends(deps.get_api_key),
+    db: AsyncSession = Depends(deps.get_db),
     response: Response = None,  # Inject Response to set headers
 ):
     """
@@ -51,6 +53,7 @@ async def chat_request(
         - X-Security-Score: Threat score (0.0-1.0)
     """
     start_time = time.perf_counter()
+    current_app = api_key.application
 
     logger.info(
         "Chat request received",
@@ -187,6 +190,36 @@ async def chat_request(
         false_refusal_detected=guardian_metrics.get("false_refusal_detected"),
         toxicity_score=guardian_metrics.get("toxicity_score"),
     )
+
+    # Update Metrics in DB
+    from sqlalchemy import func
+
+    api_key.last_used_at = func.now()
+    api_key.request_count += 1
+
+    # Update usage_data JSON
+    # Structure: {"model_name": {"input_tokens": 0, "output_tokens": 0}}
+    current_usage = dict(api_key.usage_data) if api_key.usage_data else {}
+
+    # Extract usage from metrics
+    model_used = response_metrics.model_used or body.model
+    input_tokens = 0
+    output_tokens = 0
+
+    if response_metrics.token_usage:
+        input_tokens = response_metrics.token_usage.input_tokens
+        output_tokens = response_metrics.token_usage.output_tokens
+
+    if model_used not in current_usage:
+        current_usage[model_used] = {"input_tokens": 0, "output_tokens": 0}
+
+    current_usage[model_used]["input_tokens"] += input_tokens
+    current_usage[model_used]["output_tokens"] += output_tokens
+
+    # Force update
+    api_key.usage_data = current_usage
+
+    await db.commit()
 
     # Return the enhanced response
     return GatewayResponse(

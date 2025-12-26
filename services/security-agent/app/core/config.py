@@ -15,21 +15,19 @@ class Settings(BaseSettings):
     # Gemini AI Studio
     GEMINI_API_KEY: str
 
-    # Security Settings
-    SECURITY_SANITIZATION_ENABLED: bool = True
-    SECURITY_PII_REDACTION_ENABLED: bool = True
-    SECURITY_XSS_PROTECTION_ENABLED: bool = True
-    SECURITY_SQL_INJECTION_DETECTION_ENABLED: bool = True
-    SECURITY_COMMAND_INJECTION_DETECTION_ENABLED: bool = True
-    SECURITY_LLM_CHECK_ENABLED: bool = True
-    SECURITY_LLM_CHECK_THRESHOLD: float = 0.85
+    # Security Settings (defaults to False - opt-in via request body)
+    SECURITY_SANITIZATION_ENABLED: bool = False
+    SECURITY_PII_REDACTION_ENABLED: bool = False
+    SECURITY_XSS_PROTECTION_ENABLED: bool = False
+    SECURITY_SQL_INJECTION_DETECTION_ENABLED: bool = False
+    SECURITY_COMMAND_INJECTION_DETECTION_ENABLED: bool = False
 
-    # TOON Conversion Settings
-    TOON_CONVERSION_ENABLED: bool = True
+    # TOON Conversion Settings (default False - opt-in via request body)
+    TOON_CONVERSION_ENABLED: bool = False
 
-    # LLM Settings
-    LLM_FORWARD_ENABLED: bool = True
-    LLM_MODEL_NAME: str = "gemini-2.0-flash-exp"
+    # LLM Settings (default False - opt-in via request body)
+    LLM_FORWARD_ENABLED: bool = False
+    LLM_MODEL_NAME: str = "gemini-3-flash-preview"
     LLM_MAX_TOKENS: int = 8192
 
     # Guardian Service (Output Validation)

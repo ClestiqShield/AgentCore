@@ -53,3 +53,6 @@ class GuardianState(TypedDict):
 
     # Metrics
     metrics_data: Optional[Dict[str, Any]]
+
+    # Request object (for feature flags)
+    request: Optional[Any]  # ValidateRequest object

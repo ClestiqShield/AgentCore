@@ -119,6 +119,11 @@ async def toon_decoder_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Decode TOON response to JSON if applicable.
     """
+    # Check if TOON decoder is enabled via request
+    request = state.get("request")
+    if not request or not request.config or not request.config.enable_toon_decoder:
+        return state
+
     metrics = get_guardian_metrics()
     start_time = time.perf_counter()
 

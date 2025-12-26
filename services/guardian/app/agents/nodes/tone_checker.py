@@ -29,7 +29,7 @@ def get_tone_llm():
 
         settings = get_settings()
         _tone_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
+            model="gemini-3-flash-preview",
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0,
         )
@@ -69,14 +69,17 @@ async def tone_checker_node(state: Dict[str, Any]) -> Dict[str, Any]:
     start_time = time.perf_counter()
 
     llm_response = state.get("llm_response", "")
-    guardrails = state.get("guardrails") or {}
 
-    # Get desired tone from guardrails
-    desired_tone = guardrails.get("brand_tone")
-
-    # Skip if brand_tone not specified
-    if not desired_tone:
+    # Check if tone checker is enabled via request
+    request = state.get("request")
+    if not request or not request.config or not request.config.enable_tone_checker:
         return state
+
+    # Get desired tone from guardrails (if provided)
+    guardrails = state.get("guardrails") or {}
+    desired_tone = guardrails.get(
+        "brand_tone", "professional"
+    )  # Default to professional
 
     if not llm_response:
         return state

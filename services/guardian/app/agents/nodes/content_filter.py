@@ -56,7 +56,7 @@ def get_content_llm():
 
         settings = get_settings()
         _content_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
+            model="gemini-3-flash-preview",
             google_api_key=settings.GEMINI_API_KEY,
             temperature=0,
         )
@@ -131,6 +131,16 @@ async def content_filter_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Filter LLM response content based on moderation mode.
     """
+    # Check if content filter is enabled via request
+    request = state.get("request")
+    if not request or not request.config or not request.config.enable_content_filter:
+        return {
+            **state,
+            "content_filtered": False,
+            "content_warnings": [],
+            "content_blocked": False,
+        }
+
     metrics = get_guardian_metrics()
     start_time = time.perf_counter()
 

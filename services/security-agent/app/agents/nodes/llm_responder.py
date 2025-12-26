@@ -19,8 +19,9 @@ logger = structlog.get_logger()
 
 # Gemini Models Only (for now)
 SUPPORTED_MODELS = {
-    "gemini-2.5-flash": "gemini-2.5-flash",
-    "default": "gemini-2.5-flash",
+    "gemini-3-pro-preview": "gemini-3-pro-preview",
+    "gemini-3-flash-preview": "gemini-3-flash-preview",
+    "default": "gemini-3-flash-preview",
 }
 
 _llm_cache: Dict[str, Any] = {}
@@ -45,22 +46,39 @@ def get_model_name(requested: str) -> str:
     return SUPPORTED_MODELS.get(requested.lower().strip(), default_model)
 
 
-def get_llm(model_name: str) -> Any:
+def get_llm(model_name: str, max_tokens: Optional[int] = None) -> Any:
     """Get or create LLM instance."""
     global _llm_cache
 
-    if model_name not in _llm_cache:
+    settings = get_settings()
+    effective_max_tokens = max_tokens or settings.LLM_MAX_TOKENS
+
+    # Include max_tokens in cache key to support varying output lengths
+    cache_key = f"{model_name}_{effective_max_tokens}"
+
+    if cache_key not in _llm_cache:
         from langchain_google_genai import ChatGoogleGenerativeAI
 
-        settings = get_settings()
-        _llm_cache[model_name] = ChatGoogleGenerativeAI(
+        _llm_cache[cache_key] = ChatGoogleGenerativeAI(
             model=model_name,
             google_api_key=settings.GEMINI_API_KEY,
-            max_tokens=settings.LLM_MAX_TOKENS,
+            max_output_tokens=effective_max_tokens,
         )
-        logger.info("Created LLM", model=model_name)
+        logger.info(
+            "Created LLM instance",
+            model=model_name,
+            max_output_tokens=effective_max_tokens,
+            cache_key=cache_key,
+        )
+    else:
+        logger.info(
+            "Reusing cached LLM",
+            model=model_name,
+            max_output_tokens=effective_max_tokens,
+            cache_key=cache_key,
+        )
 
-    return _llm_cache[model_name]
+    return _llm_cache[cache_key]
 
 
 async def call_guardian(
@@ -69,6 +87,15 @@ async def call_guardian(
     output_format: str = "json",
     guardrails: Optional[Dict[str, Any]] = None,
     original_query: Optional[str] = None,
+    # Guardian feature flags
+    enable_content_filter: bool = False,
+    enable_pii_scanner: bool = False,
+    enable_toon_decoder: bool = False,
+    enable_hallucination_detector: bool = False,
+    enable_citation_verifier: bool = False,
+    enable_tone_checker: bool = False,
+    enable_refusal_detector: bool = False,
+    enable_disclaimer_injector: bool = False,
 ) -> Dict[str, Any]:
     """Call Guardian for output validation."""
     settings = get_settings()
@@ -83,6 +110,17 @@ async def call_guardian(
                     "output_format": output_format,
                     "guardrails": guardrails,
                     "original_query": original_query,
+                    # Pass Guardian feature flags via structured config
+                    "config": {
+                        "enable_content_filter": enable_content_filter,
+                        "enable_pii_scanner": enable_pii_scanner,
+                        "enable_toon_decoder": enable_toon_decoder,
+                        "enable_hallucination_detector": enable_hallucination_detector,
+                        "enable_citation_verifier": enable_citation_verifier,
+                        "enable_tone_checker": enable_tone_checker,
+                        "enable_refusal_detector": enable_refusal_detector,
+                        "enable_disclaimer_injector": enable_disclaimer_injector,
+                    },
                 },
             )
             response.raise_for_status()
@@ -94,13 +132,14 @@ async def call_guardian(
 
 async def llm_responder_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """LangGraph node for LLM response."""
-    settings = get_settings()
     metrics = get_security_metrics()
 
     if state.get("is_blocked"):
         return state
 
-    if not settings.LLM_FORWARD_ENABLED:
+    # Check if LLM forward is enabled via request
+    request = state.get("request")
+    if not request or not request.sentinel_config.enable_llm_forward:
         return state
 
     # Get query
@@ -122,13 +161,18 @@ async def llm_responder_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     model_name = get_model_name(requested_model)
 
-    logger.info("LLM request", model=model_name)
+    max_output_tokens = input_data.get("max_output_tokens")
+
+    logger.info("LLM request", model=model_name, max_tokens=max_output_tokens)
 
     try:
-        llm = get_llm(model_name)
+        llm = get_llm(model_name, max_tokens=max_output_tokens)
 
+        sys_prompt_text = (
+            input_data.get("system_prompt") or "You are a helpful AI assistant."
+        )
         messages = [
-            SystemMessage(content="You are a helpful AI assistant."),
+            SystemMessage(content=sys_prompt_text),
             HumanMessage(content=query),
         ]
 
@@ -167,6 +211,31 @@ async def llm_responder_node(state: Dict[str, Any]) -> Dict[str, Any]:
             output_format,
             guardrails=guardrails,
             original_query=original_query,
+            # Pass Guardian feature flags from request
+            enable_content_filter=request.guardian_config.enable_content_filter
+            if request and request.guardian_config
+            else False,
+            enable_pii_scanner=request.guardian_config.enable_pii_scanner
+            if request and request.guardian_config
+            else False,
+            enable_toon_decoder=request.guardian_config.enable_toon_decoder
+            if request and request.guardian_config
+            else False,
+            enable_hallucination_detector=request.guardian_config.enable_hallucination_detector
+            if request and request.guardian_config
+            else False,
+            enable_citation_verifier=request.guardian_config.enable_citation_verifier
+            if request and request.guardian_config
+            else False,
+            enable_tone_checker=request.guardian_config.enable_tone_checker
+            if request and request.guardian_config
+            else False,
+            enable_refusal_detector=request.guardian_config.enable_refusal_detector
+            if request and request.guardian_config
+            else False,
+            enable_disclaimer_injector=request.guardian_config.enable_disclaimer_injector
+            if request and request.guardian_config
+            else False,
         )
 
         # DEBUG: Log what Guardian returned

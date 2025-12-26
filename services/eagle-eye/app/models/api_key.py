@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean
+from sqlalchemy import Column, String, ForeignKey, DateTime, Boolean, Integer, JSON
 from sqlalchemy.sql import func
 from app.core.db import Base
 import uuid
@@ -20,6 +20,10 @@ class ApiKey(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=True)
     last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Usage Stats
+    request_count = Column(Integer, default=0)
+    usage_data = Column(JSON, default=dict)
 
     # Relationships
     application = relationship("Application", back_populates="api_keys")

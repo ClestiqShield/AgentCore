@@ -40,3 +40,21 @@ class AgentState(TypedDict):
     # Metadata
     client_ip: Optional[str]
     user_agent: Optional[str]
+
+    # Request object (for feature flags)
+    request: Optional[Any]  # ChatRequest object
+
+    # Internal Configs
+    sentinel_config: Optional[Any]
+    guardian_config: Optional[Any]
+
+    # Detailed Guardian Metrics (Flattened for easier access)
+    hallucination_detected: Optional[bool]
+    citations_verified: Optional[bool]
+    tone_compliant: Optional[bool]
+    disclaimer_injected: Optional[bool]
+    false_refusal_detected: Optional[bool]
+    toxicity_score: Optional[float]
+
+    # Security LLM Check Result
+    security_llm_check: Optional[Dict[str, Any]]

@@ -38,7 +38,7 @@ async def create_app(
         )
     await db.refresh(new_app)
     logger.info("Application created", app_id=str(new_app.id))
-    telemetry.increment("clestiq.eagleeye.apps.created")
+    telemetry.increment("clestiq.eagleeye.apps.created", tags=[f"user:{user_id}"])
     return new_app
 
 
@@ -124,5 +124,5 @@ async def delete_app(
 
     await db.delete(app)
     await db.commit()
-    telemetry.increment("clestiq.eagleeye.apps.deleted")
+    telemetry.increment("clestiq.eagleeye.apps.deleted", tags=[f"user:{user_id}"])
     return {"message": "Application deleted"}

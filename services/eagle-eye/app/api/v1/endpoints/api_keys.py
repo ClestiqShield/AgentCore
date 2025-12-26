@@ -64,7 +64,7 @@ async def create_api_key(
         api_key=plain_key,  # IMPORTANT: Shown only once
     )
 
-    telemetry.increment("clestiq.eagleeye.api_keys.created", tags=[f"app:{app.name}"])
+    telemetry.increment("clestiq.eagleeye.api_keys.created", tags=[f"app:{app.name}", f"user:{app.owner_id}"])
 
     return response_obj
 
@@ -116,5 +116,5 @@ async def revoke_api_key(
 
     await db.delete(key)  # Or set is_active = False for soft delete
     await db.commit()
-    telemetry.increment("clestiq.eagleeye.api_keys.revoked", tags=[f"app:{app.name}"])
+    telemetry.increment("clestiq.eagleeye.api_keys.revoked", tags=[f"app:{app.name}", f"user:{app.owner_id}"])
     return {"message": "API Key revoked"}
